@@ -84,7 +84,7 @@ while true; do
             activate_root_login
             ;;
         *)
-            echo "Ungültige Eingabe, bitte Option 1-9 wählen."
+            echo "Ungültige Eingabe, bitte Option 1-9 (q) wählen."
             ;;
     esac
 done
