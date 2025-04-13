@@ -15,7 +15,7 @@ show_menu() {
     echo "5) Zeitzone auf Europe/Berlin setzen"
     echo "6) SSH aktivieren"
     echo "7) Neustarten"
-    echo "8) Skript beenden"
+    echo "Q) Skript beenden"
     echo "9) Root-Login aktivieren und Root-Passwort auf 'admin' setzen"
     echo ""
 }
@@ -27,7 +27,7 @@ install_tools() {
         case "$answer" in
             [Yy]* | "" ) sudo apt install -y $tool ;;
             [Nn]* ) echo "$tool wird übersprungen." ;;
-            * ) echo "Ungültige Eingabe. $tool wird übersprungen." ;;
+            * ) echo "Ungültige Eingabe. $tool wird übersprungen." ;;
         esac
     done
 }
@@ -73,9 +73,9 @@ while true; do
             echo "Neustart wird ausgeführt..."
             sudo reboot
             ;;
-        8)
-            echo "Setup-Skript beendet. ✅"
-            exit 0
+      Q|q)
+          echo "Beende Setup. Tschüss!"
+          exit 0
             ;;
         9)
             activate_root_login
@@ -85,3 +85,5 @@ while true; do
             ;;
     esac
 done
+
+
