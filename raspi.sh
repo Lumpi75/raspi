@@ -10,7 +10,7 @@ show_menu() {
     echo "Was möchtest du tun?"
     echo "1) System-Update & Upgrade durchführen"
     echo "2) Tools installieren (git, tilde, htop, curl, python3-pip)"
-    echo "3) Python-Pakete vorbereiten (aktuell leer)"
+    echo "3) SSH-Schlüssel löschen"
     echo "4) EDITOR=tilde als Umgebungsvariable setzen"
     echo "5) Zeitzone auf Europe/Berlin setzen"
     echo "6) SSH aktivieren"
@@ -52,7 +52,10 @@ while true; do
             install_tools
             ;;
         3)
-            echo "Python-Setup aktuell leer. Du kannst später Pakete mit 'pip install paketname' installieren."
+            echo "Alle SSH-Schlüssel werden gelöscht..."
+            rm -rf ~/.ssh/*
+            echo "SSH-Schlüssel gelöscht!"
+            read -p "Weiter mit [Enter]..."
             ;;
         4)
             if ! grep -q "EDITOR=tilde" ~/.bashrc; then
