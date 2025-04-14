@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# Automatisches Installations-Skript für den POE-FAN-HAT C
+# Quelle: https://github.com/Lumpi75/raspi/tree/main/poe-fan-hat-c
+# Stand: 2025-04-14
+
+set -e
+
+echo "==> 0/6: Benutzername abfragen..."
+read -p "Bitte gib den Benutzer an (Standard: admin): " USERNAME
+USERNAME=${USERNAME:-admin}  # Wenn Eingabe leer ist, dann 'admin'
+
+USERDIR="/home/$USERNAME"
+
+# Check ob Benutzer existiert
+if [ ! -d "$USERDIR" ]; then
+    echo "❌ Benutzerordner $USERDIR existiert nicht! Skript abgebrochen."
+    exit 1
+fi
+
+echo "Benutzer $USERNAME ausgewählt."
+
+echo "==> 1/6: System aktualisieren..."
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip python3-smbus i2c-tools git stress
+
+echo "==> 2/6: Python-Bibliotheken installieren..."
+sudo pip3 install --break-system-packages smbus2 RPi.GPIO Pillow
+
+echo "==> 3/6: Klone GitHub-Repository..."
+cd "$USERDIR/"
+if [ ! -d "poe-fan-hat-c" ]; then
+  git clone https://github.com/Lumpi75/raspi.git
+  mv raspi/poe-fan-hat-c .
+  rm -rf raspi
+else
+  echo "Verzeichnis poe-fan-hat-c existiert bereits, überspringe Git-Clone."
+fi
+
+echo "==> 4/6: Erstelle systemd Service-Datei..."
+
+# Service-Datei erstellen
+cat <<EOF | sudo tee /etc/systemd/system/poe-fan-hat-c.service
+[Unit]
+Description=POE-FAN-HAT-C Service
+After=network.target
+
+[Service]
+Restart=always
+RestartSec=5
+Type=simple
+ExecStart=/usr/bin/python3 -u $USERDIR/poe-fan-hat-c/python/main.py
+User=$USERNAME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "==> 5/6: Systemd Service aktivieren..."
+
+# systemd neu laden und Service aktivieren
+sudo systemctl daemon-reload
+sudo systemctl enable poe-fan-hat-c.service
+sudo systemctl start poe-fan-hat-c.service
+
+echo "==> 6/6: Setup abgeschlossen!"
+echo "✅ Dein POE-HAT Lüfter + OLED Display werden jetzt automatisch bei jedem Start aktiviert."
+echo "ℹ️  Status prüfen: sudo systemctl status poe-fan-hat-c.service"
+echo "ℹ️  Logs prüfen: journalctl -u poe-fan-hat-c.service -f"
