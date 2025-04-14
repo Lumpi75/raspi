@@ -4,6 +4,70 @@ echo "--------------------------------------"
 echo "🛠️  Raspberry Pi Standard Setup Script - V4 (mit Menü und Root-Login)"
 echo "--------------------------------------"
 
+##########################
+# Punkt 11: POE-HAT installieren
+##########################
+echo ""
+echo "==> Punkt 11: Installation POE-HAT Fan HAT + OLED Display"
+echo ""
+
+read -p "Bitte gib den Benutzer an (Standard: admin): " USERNAME
+USERNAME=${USERNAME:-admin}
+USERDIR="/home/$USERNAME"
+
+# Prüfen ob Benutzer existiert
+if [ ! -d "$USERDIR" ]; then
+    echo "❌ Benutzerordner $USERDIR existiert nicht! Installation abgebrochen."
+    exit 1
+fi
+
+echo "Benutzer $USERNAME ausgewählt."
+
+# Systempakete installieren
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip python3-smbus i2c-tools git stress
+
+# Python-Bibliotheken installieren
+sudo pip3 install --break-system-packages smbus2 RPi.GPIO Pillow
+
+# GitHub-Repository klonen oder aktualisieren
+cd "$USERDIR/"
+if [ ! -d "POE-HAT" ]; then
+  git clone https://github.com/Lumpi75/raspi.git
+  mv raspi/POE-HAT .
+  rm -rf raspi
+else
+  echo "Verzeichnis POE-HAT existiert bereits, führe git pull aus..."
+  cd POE-HAT
+  git pull
+fi
+
+# Systemd Service-Datei für POE-HAT erstellen
+cat <<EOF | sudo tee /etc/systemd/system/poe-hat-c.service
+[Unit]
+Description=POE-FAN-HAT-C Service
+After=network.target
+
+[Service]
+Restart=always
+RestartSec=5
+Type=simple
+ExecStart=/usr/bin/python3 -u $USERDIR/POE-HAT/python/main.py
+User=$USERNAME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Service aktivieren
+sudo systemctl daemon-reload
+sudo systemctl enable poe-hat-c.service
+sudo systemctl start poe-hat-c.service
+
+echo "✅ POE-HAT Installation abgeschlossen!"
+echo "ℹ️  Dienst-Status: sudo systemctl status poe-hat-c.service"
+
+
 # Funktion für Menü
 show_menu() {
     echo ""
