@@ -9,10 +9,14 @@ NC='\033[0m' # No Color
 set -e
 clear
 
+# Eigener Skriptordner erkennen
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
 echo -e "${GREEN}--------------------------------------${NC}"
 echo -e "${YELLOW}🛠️  Raspberry Pi Installationsmenü${NC}"
 echo -e "${GREEN}--------------------------------------${NC}"
 
+# Funktionen
 show_menu() {
     echo ""
     echo "Was möchtest du tun?"
@@ -34,15 +38,15 @@ while true; do
     show_menu
     read -p "Option wählen [1-11, q]: " choice
     case $choice in
-        1) bash Install-Updates.sh ;;
-        2) bash Install-Tools.sh ;;
-        3) bash Delete-SSH-Keys.sh ;;
-        4) bash Install-Editor.sh ;;
+        1) bash "$SCRIPT_DIR/Install-Updates.sh" ;;
+        2) bash "$SCRIPT_DIR/Install-Tools.sh" ;;
+        3) bash "$SCRIPT_DIR/Delete-SSH-Keys.sh" ;;
+        4) bash "$SCRIPT_DIR/Install-Editor.sh" ;;
         5) sudo timedatectl set-timezone Europe/Berlin && echo -e "${GREEN}✅ Zeitzone gesetzt.${NC}" ;;
-        6) bash Install-SSH.sh ;;
-        9) bash Root-Login.sh ;;
-        10) bash Install-VNC-SPI-I2C.sh ;;
-        11) bash Install-POE-Hat.sh ;;
+        6) bash "$SCRIPT_DIR/Install-SSH.sh" ;;
+        9) bash "$SCRIPT_DIR/Root-Login.sh" ;;
+        10) bash "$SCRIPT_DIR/Install-VNC-SPI-I2C.sh" ;;
+        11) bash "$SCRIPT_DIR/Install-POE-Hat.sh" ;;
         Q|q)
             clear
             echo -e "${GREEN}✅ Setup abgeschlossen. Tschüss!${NC}"
