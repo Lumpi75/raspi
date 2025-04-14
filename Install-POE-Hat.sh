@@ -20,7 +20,7 @@ if [ ! -d "POE-HAT" ]; then
     mv raspi/POE-HAT .
     rm -rf raspi
 else
-    echo "POE-HAT Verzeichnis vorhanden, führe update aus..."
+    echo "POE-HAT Verzeichnis vorhanden, update..."
     cd POE-HAT
     git pull
 fi
