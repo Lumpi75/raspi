@@ -11,7 +11,7 @@ clear
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
 echo -e "${GREEN}--------------------------------------${NC}"
-echo -e "${YELLOW}🛠️  Raspberry Pi Installationsmenü${NC}"
+echo -e "${YELLOW}🛠️  Raspberry Pi Installationsmenü V2${NC}"
 echo -e "${GREEN}--------------------------------------${NC}"
 
 show_menu() {
