@@ -1,32 +1,27 @@
-#!/bin/bash
+install_mhs35_display() {
+    echo "📺 Installiere MHS-3.5'' Touch Display mit 180° Drehung..."
 
-set -e
+    WORKDIR="/tmp/mhs35"
+    rm -rf "$WORKDIR"
+    mkdir -p "$WORKDIR"
+    cd "$WORKDIR"
 
-echo "📺 MHS-3.5 Touch Display Installer für Raspberry Pi"
+    echo "🔧 SPI aktivieren..."
+    sudo raspi-config nonint do_spi 0
 
-# 1. SPI aktivieren
-echo "🔧 SPI aktivieren..."
-sudo raspi-config nonint do_spi 0
+    echo "📦 Abhängigkeiten installieren..."
+    sudo apt update
+    sudo apt install -y xserver-xorg-input-evdev xinput xinput-calibrator git
 
-# 2. Abhängigkeiten installieren
-echo "📦 Abhängigkeiten installieren..."
-sudo apt update
-sudo apt install -y xserver-xorg-input-evdev xinput xinput-calibrator git
+    echo "⬇️ Lade Treiber herunter..."
+    git clone https://github.com/goodtft/LCD-show.git
+    cd LCD-show
 
-# 3. Verzeichnisse
-WORKDIR="/tmp/mhs35"
-rm -rf "$WORKDIR"
-mkdir -p "$WORKDIR"
-cd "$WORKDIR"
+    echo "🛠️ Installiere Display-Treiber (Rotation: 180°)..."
+    sudo chmod +x LCD35-show
+    sudo ./LCD35-show 180
 
-# 4. Treiber von GitHub klonen (WaveShare MHS35 kompatibel)
-echo "⬇️ Treiber herunterladen..."
-git clone https://github.com/goodtft/LCD-show.git
-cd LCD-show
-
-# 5. Display installieren (rot=0°)
-echo "🛠️ Displaytreiber installieren..."
-sudo chmod +x LCD35-show
-sudo ./LCD35-show
-
-# Das Skript rebootet automatisch!
+    echo -e "${GREEN}✅ MHS-3.5'' Display installiert und auf 180° rotiert. Gerät startet nun neu...${NC}"
+    sleep 3
+    sudo reboot
+}
