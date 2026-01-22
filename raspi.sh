@@ -9,375 +9,198 @@ NC='\033[0m'
 
 pause() { read -p "Weiter mit [Enter]..."; }
 
-# --- Helper: config.txt Pfad finden (Pi OS/Debian kann variieren) ---
-boot_config_path() {
-  if [[ -f /boot/firmware/config.txt ]]; then
-    echo "/boot/firmware/config.txt"
-  elif [[ -f /boot/config.txt ]]; then
-    echo "/boot/config.txt"
-  else
-    echo ""
-  fi
-}
-
-# --- Funktionen ---
+# ------------------------------------------------------------
+# SYSTEM
+# ------------------------------------------------------------
 
 update_system() {
-  echo "System wird aktualisiert..."
-  sudo apt update
-  sudo apt upgrade -y
-  echo -e "${GREEN}✅ System-Update abgeschlossen.${NC}"
-  pause
+    sudo apt update
+    sudo apt upgrade -y
+    echo -e "${GREEN}✅ System-Update abgeschlossen.${NC}"
+    pause
 }
 
 install_tools() {
-  # Standard-Tools (ohne tilde)
-  local tools=("git" "htop" "curl" "python3-pip")
-  sudo apt update
+    local tools=("git" "htop" "curl" "python3-pip")
+    sudo apt update
 
-  for tool in "${tools[@]}"; do
-    read -p "$tool installieren? (Y/n): " answer
-    case "$answer" in
-      [Yy]* | "" )
-        sudo apt install -y "$tool"
-        echo -e "${GREEN}✅ $tool installiert.${NC}"
-        ;;
-      [Nn]* )
-        echo -e "${YELLOW}➡️  $tool übersprungen.${NC}"
-        ;;
-      * )
-        echo -e "${RED}❌ Ungültige Eingabe. $tool wird übersprungen.${NC}"
-        ;;
-    esac
-  done
+    for tool in "${tools[@]}"; do
+        read -p "$tool installieren? (Y/n): " a
+        [[ "$a" =~ ^[Yy]?$ ]] && sudo apt install -y "$tool"
+    done
 
-  pause
+    echo -e "${GREEN}✅ Tools abgeschlossen.${NC}"
+    pause
 }
 
-# --- TILDE: korrekt aus Git bauen (mehrere Repos + doall + make) ---
+# ------------------------------------------------------------
+# TILDE – SOURCE BUILD (KORREKT)
+# ------------------------------------------------------------
+
 install_tilde() {
-  echo -e "${YELLOW}Installiere tilde Editor (Build aus Source – Git Dev Build)...${NC}"
+    echo -e "${YELLOW}Installiere tilde (Source-Build, Git-Dev)…${NC}"
 
-  if command -v tilde >/dev/null 2>&1; then
-    echo -e "${GREEN}✅ tilde ist bereits installiert: $(command -v tilde)${NC}"
+    if command -v tilde >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ tilde ist bereits installiert: $(which tilde)${NC}"
+        pause
+        return
+    fi
+
+    echo "📦 Abhängigkeiten installieren…"
+    sudo apt update
+    sudo apt install -y \
+        git build-essential pkg-config \
+        flex gettext \
+        libacl1-dev libattr1-dev \
+        libgpm-dev \
+        libncurses-dev \
+        libpcre2-dev \
+        libtool-bin \
+        libunistring-dev \
+        libxcb1-dev libx11-dev \
+        clang
+
+    WORKDIR="/tmp/tilde-dev"
+    rm -rf "$WORKDIR"
+    mkdir -p "$WORKDIR"
+    cd "$WORKDIR"
+
+    echo "⬇️ Repositories klonen…"
+    for r in makesys transcript t3shared t3window t3widget t3key t3config t3highlight tilde; do
+        git clone https://github.com/gphalkes/$r.git
+    done
+
+    echo "🛠️ Build aller Komponenten…"
+    ./t3shared/doall --skip-non-source --stop-on-error make -C src
+
+    BIN="$WORKDIR/tilde/src/.objects/edit"
+    if [[ ! -x "$BIN" ]]; then
+        echo -e "${RED}❌ tilde Binary nicht gefunden.${NC}"
+        echo "➡️ Build ist vorher fehlgeschlagen – siehe Output."
+        pause
+        return
+    fi
+
+    sudo install -m 0755 "$BIN" /usr/local/bin/tilde
+
+    echo -e "${GREEN}✅ tilde installiert: /usr/local/bin/tilde${NC}"
     pause
-    return
-  fi
-
-  echo "📦 Build-Abhängigkeiten installieren..."
-  sudo apt update
-  sudo apt install -y \
-    git build-essential pkg-config \
-    flex gettext \
-    libacl1-dev libattr1-dev \
-    libgpm-dev \
-    libncurses-dev \
-    libpcre2-dev \
-    libtool-bin \
-    libunistring-dev \
-    libxcb1-dev libx11-dev \
-    clang
-
-  # Build-Ordner
-  local WORKDIR="/tmp/tilde-dev"
-  rm -rf "$WORKDIR"
-  mkdir -p "$WORKDIR"
-  cd "$WORKDIR"
-
-  echo "⬇️ Repos klonen (T3 + tilde)..."
-  # Reihenfolge egal, doall regelt den Build-Order
-  for i in makesys transcript t3shared t3window t3widget t3key t3config t3highlight tilde; do
-    git clone "https://github.com/gphalkes/$i.git"
-  done
-
-  echo "🛠️ Build aller Libraries + tilde (doall make -C src)..."
-  # gem. tilde README: ./t3shared/doall --skip-non-source --stop-on-error make -C src
-  ./t3shared/doall --skip-non-source --stop-on-error make -C src
-
-  # Ergebnis laut README:
-  # tilde/src/.objects/edit ist der frisch gebaute Editor
-  local BIN="$WORKDIR/tilde/src/.objects/edit"
-  if [[ ! -x "$BIN" ]]; then
-    echo -e "${RED}❌ Build fertig, aber Binary nicht gefunden: $BIN${NC}"
-    echo -e "${YELLOW}➡️  Schau in den Build-Output oben (Fehler in einer der Libs).${NC}"
-    pause
-    return
-  fi
-
-  echo "📦 Installieren nach /usr/local/bin/tilde ..."
-  sudo install -m 0755 "$BIN" /usr/local/bin/tilde
-
-  echo -e "${GREEN}✅ tilde installiert: /usr/local/bin/tilde${NC}"
-  echo -e "${YELLOW}Hinweis:${NC} Das ist ein Dev-Build aus Git (nicht Release-Tarball)."
-  pause
-}
-
-ssh_keys_loschen() {
-  echo "SSH-Schlüssel werden gelöscht..."
-  rm -rf ~/.ssh/*
-  echo -e "${GREEN}✅ SSH-Schlüssel gelöscht.${NC}"
-  pause
 }
 
 set_editor_tilde() {
-  if ! command -v tilde >/dev/null 2>&1; then
-    echo -e "${RED}❌ tilde ist nicht installiert.${NC}"
-    echo -e "${YELLOW}➡️  Bitte zuerst Menüpunkt 8 „tilde Editor installieren“ ausführen.${NC}"
+    if ! command -v tilde >/dev/null 2>&1; then
+        echo -e "${RED}❌ tilde nicht installiert.${NC}"
+        pause
+        return
+    fi
+
+    grep -q '^export EDITOR=' ~/.bashrc \
+        && sed -i 's/^export EDITOR=.*/export EDITOR=tilde/' ~/.bashrc \
+        || echo 'export EDITOR=tilde' >> ~/.bashrc
+
+    echo -e "${GREEN}✅ EDITOR=tilde gesetzt (neue Shell nötig).${NC}"
     pause
-    return
-  fi
+}
 
-  if ! grep -q '^export EDITOR=' ~/.bashrc 2>/dev/null; then
-    echo "export EDITOR=tilde" >> ~/.bashrc
-  else
-    sed -i 's/^export EDITOR=.*/export EDITOR=tilde/' ~/.bashrc
-  fi
+# ------------------------------------------------------------
+# DIVERSES
+# ------------------------------------------------------------
 
-  echo -e "${GREEN}✅ EDITOR=tilde gesetzt (wirkt nach neuem Login / neuer Shell).${NC}"
-  pause
+ssh_keys_loschen() {
+    rm -rf ~/.ssh/*
+    echo -e "${GREEN}✅ SSH-Schlüssel gelöscht.${NC}"
+    pause
 }
 
 set_timezone_berlin() {
-  sudo timedatectl set-timezone Europe/Berlin
-  echo -e "${GREEN}✅ Zeitzone auf Berlin gesetzt.${NC}"
-  pause
+    sudo timedatectl set-timezone Europe/Berlin
+    echo -e "${GREEN}✅ Zeitzone gesetzt.${NC}"
+    pause
 }
 
 ssh_aktivieren() {
-  sudo systemctl enable ssh
-  sudo systemctl start ssh
-  echo -e "${GREEN}✅ SSH-Dienst aktiviert.${NC}"
-  pause
-}
-
-install_mhs35_display() {
-  echo "📺 Installiere MHS-3.5'' Touch Display..."
-
-  local WORKDIR="/tmp/mhs35"
-  rm -rf "$WORKDIR"
-  mkdir -p "$WORKDIR"
-  cd "$WORKDIR"
-
-  echo "🔧 SPI aktivieren..."
-  sudo raspi-config nonint do_spi 0
-
-  echo "📦 Abhängigkeiten installieren..."
-  sudo apt update
-  sudo apt install -y xserver-xorg-input-evdev xinput xinput-calibrator git
-
-  echo "⬇️ Lade Treiber herunter..."
-  git clone https://github.com/goodtft/LCD-show.git
-  cd LCD-show
-
-  echo "🛠️ Installiere Display-Treiber (Rotation: 0°)..."
-  sudo chmod +x LCD35-show
-  sudo ./LCD35-show
-
-  echo -e "${GREEN}✅ MHS-3.5'' Display installiert. Gerät startet nun neu...${NC}"
-  sleep 3
-  sudo reboot
-}
-
-root_login_aktivieren() {
-  echo -e "${YELLOW}⚠️  Achtung: Root-Login per SSH ist unsicher.${NC}"
-  read -p "Root-Login wirklich aktivieren? (y/N): " ok
-  case "$ok" in
-    [Yy]* ) ;;
-    * )
-      echo -e "${YELLOW}➡️  Abgebrochen.${NC}"
-      pause
-      return
-      ;;
-  esac
-
-  read -s -p "Neues root Passwort eingeben: " ROOTPW
-  echo
-  read -s -p "Passwort wiederholen: " ROOTPW2
-  echo
-  if [[ "$ROOTPW" != "$ROOTPW2" ]]; then
-    echo -e "${RED}❌ Passwörter stimmen nicht überein.${NC}"
+    sudo systemctl enable ssh
+    sudo systemctl start ssh
+    echo -e "${GREEN}✅ SSH aktiviert.${NC}"
     pause
-    return
-  fi
-
-  echo "root:$ROOTPW" | sudo chpasswd
-
-  if grep -qE '^\s*#?\s*PermitRootLogin' /etc/ssh/sshd_config; then
-    sudo sed -i 's/^\s*#\?\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-  else
-    echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config >/dev/null
-  fi
-
-  sudo systemctl restart ssh
-  echo -e "${GREEN}✅ Root-Login aktiviert.${NC}"
-  pause
 }
 
 schnittstellen_aktivieren() {
-  sudo raspi-config nonint do_vnc 0
-  sudo raspi-config nonint do_spi 0
-  sudo raspi-config nonint do_i2c 0
-  sudo raspi-config nonint do_serial 1
-  echo -e "${GREEN}✅ VNC, SPI, I2C, Serial Port aktiviert.${NC}"
-  pause
-}
-
-install_poe_hat() {
-  echo "Installiere POE-HAT Fan HAT + OLED Display..."
-
-  read -p "Benutzername (Standard: admin): " USERNAME
-  USERNAME=${USERNAME:-admin}
-  local USERDIR="/home/$USERNAME"
-
-  if [[ ! -d "$USERDIR" ]]; then
-    echo -e "${RED}❌ Benutzer $USERNAME existiert nicht.${NC}"
+    sudo raspi-config nonint do_vnc 0
+    sudo raspi-config nonint do_spi 0
+    sudo raspi-config nonint do_i2c 0
+    sudo raspi-config nonint do_serial 1
+    echo -e "${GREEN}✅ VNC / SPI / I2C / Serial aktiviert.${NC}"
     pause
-    return
-  fi
-
-  sudo apt update
-  sudo apt install -y python3 python3-pip python3-smbus i2c-tools git stress
-  sudo pip3 install --break-system-packages smbus2 RPi.GPIO Pillow
-
-  cd "$USERDIR/"
-  if [[ ! -d "POE-HAT" ]]; then
-    git clone https://github.com/Lumpi75/raspi.git
-    mv raspi/POE-HAT .
-    rm -rf raspi
-  else
-    echo "POE-HAT Verzeichnis vorhanden, update..."
-    cd POE-HAT
-    git pull
-  fi
-
-  sudo tee /etc/systemd/system/poe-hat-c.service > /dev/null <<EOF
-[Unit]
-Description=POE-FAN-HAT-C Service
-After=network.target
-
-[Service]
-Restart=always
-RestartSec=5
-Type=simple
-ExecStart=/usr/bin/python3 -u $USERDIR/POE-HAT/python/main.py
-User=$USERNAME
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  sudo systemctl daemon-reload
-  sudo systemctl enable poe-hat-c.service
-  sudo systemctl start poe-hat-c.service
-
-  echo -e "${GREEN}✅ POE-HAT Installation abgeschlossen.${NC}"
-  pause
 }
 
-# --- Display + Touch dauerhaft 180° drehen ---
+# ------------------------------------------------------------
+# DISPLAY ROTATION
+# ------------------------------------------------------------
+
+boot_config_path() {
+    [[ -f /boot/firmware/config.txt ]] && echo /boot/firmware/config.txt && return
+    [[ -f /boot/config.txt ]] && echo /boot/config.txt && return
+    echo ""
+}
+
 rotate_display_180() {
-  echo -e "${YELLOW}🔁 Setze Display-Rotation dauerhaft auf 180° (Bild + Touch).${NC}"
+    CFG=$(boot_config_path)
+    [[ -z "$CFG" ]] && echo "❌ config.txt nicht gefunden" && pause && return
 
-  local CFG
-  CFG="$(boot_config_path)"
-  if [[ -z "$CFG" ]]; then
-    echo -e "${RED}❌ Konnte config.txt nicht finden (/boot/firmware/config.txt oder /boot/config.txt).${NC}"
-    pause
-    return
-  fi
-
-  echo "➡️  Boot-Konfig: $CFG"
-
-  # Bild drehen: display_rotate=2 setzen (ersetzen oder hinzufügen)
-  if sudo grep -qE '^\s*display_rotate\s*=' "$CFG"; then
-    sudo sed -i 's/^\s*display_rotate\s*=.*/display_rotate=2/' "$CFG"
-  else
+    sudo sed -i '/^display_rotate=/d' "$CFG"
     echo "display_rotate=2" | sudo tee -a "$CFG" >/dev/null
-  fi
 
-  echo -e "${GREEN}✅ display_rotate=2 gesetzt.${NC}"
-
-  # Touch drehen (X11): Xorg conf anlegen
-  sudo mkdir -p /etc/X11/xorg.conf.d
-
-  sudo tee /etc/X11/xorg.conf.d/40-touch-rotate-180.conf >/dev/null <<'EOF'
-# Rotate touchscreen input by 180° (Xorg)
-# Works with libinput (CalibrationMatrix) and evdev (TransformationMatrix)
-
+    sudo mkdir -p /etc/X11/xorg.conf.d
+    sudo tee /etc/X11/xorg.conf.d/40-touch-rotate-180.conf >/dev/null <<'EOF'
 Section "InputClass"
-    Identifier "Rotate Touchscreen 180 (libinput)"
+    Identifier "Rotate Touchscreen 180"
     MatchIsTouchscreen "on"
     MatchDriver "libinput"
     Option "CalibrationMatrix" "-1 0 1 0 -1 1 0 0 1"
 EndSection
-
-Section "InputClass"
-    Identifier "Rotate Touchscreen 180 (evdev)"
-    MatchIsTouchscreen "on"
-    MatchDriver "evdev"
-    Option "TransformationMatrix" "-1 0 1 0 -1 1 0 0 1"
-EndSection
 EOF
 
-  echo -e "${GREEN}✅ Touch-Rotation (X11) gesetzt: /etc/X11/xorg.conf.d/40-touch-rotate-180.conf${NC}"
-  echo -e "${YELLOW}Hinweis:${NC} Touch-Rotation wirkt bei X11. Wenn du Wayland nutzt, greift das ggf. nicht."
-
-  echo -e "${GREEN}✅ Fertig. Reboot erforderlich.${NC}"
-  read -p "Jetzt neu starten? (y/N): " rb
-  case "$rb" in
-    [Yy]* ) sudo reboot ;;
-    * ) pause ;;
-  esac
+    echo -e "${GREEN}✅ Display + Touch auf 180° gesetzt (Reboot nötig).${NC}"
+    read -p "Jetzt neu starten? (y/N): " r
+    [[ "$r" =~ ^[Yy]$ ]] && sudo reboot
+    pause
 }
 
-display_menu() {
-  echo ""
-  echo "Was möchtest du tun?"
-  echo "1) System-Update & Upgrade"
-  echo "2) Tools installieren (ohne tilde)"
-  echo "3) SSH-Schlüssel löschen"
-  echo "4) EDITOR auf tilde setzen"
-  echo "5) Zeitzone auf Berlin setzen"
-  echo "6) SSH aktivieren"
-  echo "7) MHS-3.5'' Display installieren"
-  echo "8) tilde Editor installieren (Source-Build)"
-  echo "9) Root-Login aktivieren"
-  echo "10) VNC, SPI, I2C, Serial aktivieren"
-  echo "11) POE-HAT installieren"
-  echo "12) Display 180° drehen (dauerhaft)"
-  echo "Q) Beenden"
-  echo ""
+# ------------------------------------------------------------
+# MENÜ
+# ------------------------------------------------------------
+
+menu() {
+    clear
+    echo "Was möchtest du tun?"
+    echo "1) System-Update & Upgrade"
+    echo "2) Tools installieren"
+    echo "3) SSH-Schlüssel löschen"
+    echo "4) EDITOR auf tilde setzen"
+    echo "5) Zeitzone auf Berlin setzen"
+    echo "6) SSH aktivieren"
+    echo "8) tilde Editor installieren (Source-Build)"
+    echo "10) VNC, SPI, I2C, Serial aktivieren"
+    echo "12) Display 180° drehen (dauerhaft)"
+    echo "Q) Beenden"
+    echo ""
 }
 
-# --- Hauptmenü ---
 while true; do
-  clear
-  echo -e "${GREEN}--------------------------------------${NC}"
-  echo -e "${YELLOW}🛠️  Raspberry Pi Komplett-Installationsskript${NC}"
-  echo -e "${GREEN}--------------------------------------${NC}"
-  display_menu
-  read -p "Option wählen [1-12, q]: " choice
-  case "$choice" in
-    1) update_system ;;
-    2) install_tools ;;
-    3) ssh_keys_loschen ;;
-    4) set_editor_tilde ;;
-    5) set_timezone_berlin ;;
-    6) ssh_aktivieren ;;
-    7) install_mhs35_display ;;
-    8) install_tilde ;;
-    9) root_login_aktivieren ;;
-    10) schnittstellen_aktivieren ;;
-    11) install_poe_hat ;;
-    12) rotate_display_180 ;;
-    Q|q)
-      clear
-      echo -e "${GREEN}✅ Setup abgeschlossen. Tschüss!${NC}"
-      exit 0
-      ;;
-    *)
-      echo -e "${RED}❌ Ungültige Eingabe.${NC}"
-      pause
-      ;;
-  esac
+    menu
+    read -p "Option wählen: " c
+    case "$c" in
+        1) update_system ;;
+        2) install_tools ;;
+        3) ssh_keys_loschen ;;
+        4) set_editor_tilde ;;
+        5) set_timezone_berlin ;;
+        6) ssh_aktivieren ;;
+        8) install_tilde ;;
+        10) schnittstellen_aktivieren ;;
+        12) rotate_display_180 ;;
+        Q|q) exit 0 ;;
+        *) echo "❌ Ungültig"; pause ;;
+    esac
 done
