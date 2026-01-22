@@ -7,12 +7,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-clear
-
-echo -e "${GREEN}--------------------------------------${NC}"
-echo -e "${YELLOW}🛠️  Raspberry Pi Komplett-Installationsskript${NC}"
-echo -e "${GREEN}--------------------------------------${NC}"
-
 pause() { read -p "Weiter mit [Enter]..."; }
 
 # --- Helper: config.txt Pfad finden (Pi OS/Debian kann variieren) ---
@@ -60,10 +54,9 @@ install_tools() {
   pause
 }
 
-# Option 8: tilde installieren (wie bisher als separater Schritt)
-# Hinweis: Falls das Repo-Skript/URL nicht mehr passt, schlägt dieser Punkt fehl.
+# --- TILDE: Source-Build (Repo ist kaputt/404) ---
 install_tilde() {
-  echo -e "${YELLOW}Installiere tilde Editor (externes Repository)...${NC}"
+  echo -e "${YELLOW}Installiere tilde Editor (Build aus Source)...${NC}"
 
   if command -v tilde >/dev/null 2>&1; then
     echo -e "${GREEN}✅ tilde ist bereits installiert.${NC}"
@@ -71,22 +64,32 @@ install_tilde() {
     return
   fi
 
+  echo "📦 Abhängigkeiten installieren..."
   sudo apt update
-  sudo apt install -y wget ca-certificates
+  sudo apt install -y \
+    git \
+    build-essential \
+    cmake \
+    libncursesw5-dev \
+    libpcre2-dev \
+    libunistring-dev
 
-  echo "➕ Repo-Skript laden..."
-  wget -q http://os.ghalkes.nl/sources.list.d/install_repo.sh -O /tmp/install_tilde_repo.sh
+  echo "⬇️ Source laden..."
+  local TMPDIR="/tmp/tilde-build"
+  rm -rf "$TMPDIR"
+  git clone https://github.com/gphalkes/tilde.git "$TMPDIR"
+  cd "$TMPDIR"
 
-  echo "➕ Repo hinzufügen..."
-  sudo sh /tmp/install_tilde_repo.sh
+  echo "🛠️ Build..."
+  mkdir -p build
+  cd build
+  cmake ..
+  make -j"$(nproc)"
 
-  echo "📦 Paketliste aktualisieren..."
-  sudo apt update
+  echo "📦 Installieren..."
+  sudo make install
 
-  echo "⬇️ tilde installieren..."
-  sudo apt install -y tilde
-
-  echo -e "${GREEN}✅ tilde erfolgreich installiert.${NC}"
+  echo -e "${GREEN}✅ tilde erfolgreich installiert: $(command -v tilde)${NC}"
   pause
 }
 
@@ -252,7 +255,7 @@ EOF
   pause
 }
 
-# --- NEU: Display + Touch dauerhaft 180° drehen ---
+# --- Display + Touch dauerhaft 180° drehen ---
 rotate_display_180() {
   echo -e "${YELLOW}🔁 Setze Display-Rotation dauerhaft auf 180° (Bild + Touch).${NC}"
 
@@ -266,7 +269,7 @@ rotate_display_180() {
 
   echo "➡️  Boot-Konfig: $CFG"
 
-  # 1) Bild drehen: display_rotate=2 setzen (ersetzen oder hinzufügen)
+  # Bild drehen: display_rotate=2 setzen (ersetzen oder hinzufügen)
   if sudo grep -qE '^\s*display_rotate\s*=' "$CFG"; then
     sudo sed -i 's/^\s*display_rotate\s*=.*/display_rotate=2/' "$CFG"
   else
@@ -275,7 +278,7 @@ rotate_display_180() {
 
   echo -e "${GREEN}✅ display_rotate=2 gesetzt.${NC}"
 
-  # 2) Touch drehen (X11): Xorg conf anlegen
+  # Touch drehen (X11): Xorg conf anlegen
   sudo mkdir -p /etc/X11/xorg.conf.d
 
   sudo tee /etc/X11/xorg.conf.d/40-touch-rotate-180.conf >/dev/null <<'EOF'
@@ -318,7 +321,7 @@ display_menu() {
   echo "5) Zeitzone auf Berlin setzen"
   echo "6) SSH aktivieren"
   echo "7) MHS-3.5'' Display installieren"
-  echo "8) tilde Editor installieren"
+  echo "8) tilde Editor installieren (Source-Build)"
   echo "9) Root-Login aktivieren"
   echo "10) VNC, SPI, I2C, Serial aktivieren"
   echo "11) POE-HAT installieren"
@@ -327,9 +330,12 @@ display_menu() {
   echo ""
 }
 
-# --- Hauptmenü ---
+# --- Start ---
 while true; do
   clear
+  echo -e "${GREEN}--------------------------------------${NC}"
+  echo -e "${YELLOW}🛠️  Raspberry Pi Komplett-Installationsskript${NC}"
+  echo -e "${GREEN}--------------------------------------${NC}"
   display_menu
   read -p "Option wählen [1-12, q]: " choice
   case "$choice" in
