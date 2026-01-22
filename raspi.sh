@@ -15,6 +15,17 @@ echo -e "${GREEN}--------------------------------------${NC}"
 
 pause() { read -p "Weiter mit [Enter]..."; }
 
+# --- Helper: config.txt Pfad finden (Pi OS/Debian kann variieren) ---
+boot_config_path() {
+  if [[ -f /boot/firmware/config.txt ]]; then
+    echo "/boot/firmware/config.txt"
+  elif [[ -f /boot/config.txt ]]; then
+    echo "/boot/config.txt"
+  else
+    echo ""
+  fi
+}
+
 # --- Funktionen ---
 
 update_system() {
@@ -26,7 +37,7 @@ update_system() {
 }
 
 install_tools() {
-  # Standard-Tools (ohne tilde!)
+  # Standard-Tools (ohne tilde)
   local tools=("git" "htop" "curl" "python3-pip")
   sudo apt update
 
@@ -45,9 +56,12 @@ install_tools() {
         ;;
     esac
   done
+
   pause
 }
 
+# Option 8: tilde installieren (wie bisher als separater Schritt)
+# Hinweis: Falls das Repo-Skript/URL nicht mehr passt, schlägt dieser Punkt fehl.
 install_tilde() {
   echo -e "${YELLOW}Installiere tilde Editor (externes Repository)...${NC}"
 
@@ -91,7 +105,6 @@ set_editor_tilde() {
     return
   fi
 
-  # EDITOR-Zeile setzen/ersetzen
   if ! grep -q '^export EDITOR=' ~/.bashrc 2>/dev/null; then
     echo "export EDITOR=tilde" >> ~/.bashrc
   else
@@ -167,7 +180,6 @@ root_login_aktivieren() {
 
   echo "root:$ROOTPW" | sudo chpasswd
 
-  # PermitRootLogin robust setzen/ergänzen
   if grep -qE '^\s*#?\s*PermitRootLogin' /etc/ssh/sshd_config; then
     sudo sed -i 's/^\s*#\?\s*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
   else
@@ -240,6 +252,62 @@ EOF
   pause
 }
 
+# --- NEU: Display + Touch dauerhaft 180° drehen ---
+rotate_display_180() {
+  echo -e "${YELLOW}🔁 Setze Display-Rotation dauerhaft auf 180° (Bild + Touch).${NC}"
+
+  local CFG
+  CFG="$(boot_config_path)"
+  if [[ -z "$CFG" ]]; then
+    echo -e "${RED}❌ Konnte config.txt nicht finden (/boot/firmware/config.txt oder /boot/config.txt).${NC}"
+    pause
+    return
+  fi
+
+  echo "➡️  Boot-Konfig: $CFG"
+
+  # 1) Bild drehen: display_rotate=2 setzen (ersetzen oder hinzufügen)
+  if sudo grep -qE '^\s*display_rotate\s*=' "$CFG"; then
+    sudo sed -i 's/^\s*display_rotate\s*=.*/display_rotate=2/' "$CFG"
+  else
+    echo "display_rotate=2" | sudo tee -a "$CFG" >/dev/null
+  fi
+
+  echo -e "${GREEN}✅ display_rotate=2 gesetzt.${NC}"
+
+  # 2) Touch drehen (X11): Xorg conf anlegen
+  sudo mkdir -p /etc/X11/xorg.conf.d
+
+  sudo tee /etc/X11/xorg.conf.d/40-touch-rotate-180.conf >/dev/null <<'EOF'
+# Rotate touchscreen input by 180° (Xorg)
+# Works with libinput (CalibrationMatrix) and evdev (TransformationMatrix)
+
+Section "InputClass"
+    Identifier "Rotate Touchscreen 180 (libinput)"
+    MatchIsTouchscreen "on"
+    MatchDriver "libinput"
+    Option "CalibrationMatrix" "-1 0 1 0 -1 1 0 0 1"
+EndSection
+
+Section "InputClass"
+    Identifier "Rotate Touchscreen 180 (evdev)"
+    MatchIsTouchscreen "on"
+    MatchDriver "evdev"
+    Option "TransformationMatrix" "-1 0 1 0 -1 1 0 0 1"
+EndSection
+EOF
+
+  echo -e "${GREEN}✅ Touch-Rotation (X11) gesetzt: /etc/X11/xorg.conf.d/40-touch-rotate-180.conf${NC}"
+  echo -e "${YELLOW}Hinweis:${NC} Touch-Rotation wirkt bei X11. Wenn du nur Wayland nutzt, greift das ggf. nicht."
+
+  echo -e "${GREEN}✅ Fertig. Reboot erforderlich.${NC}"
+  read -p "Jetzt neu starten? (y/N): " rb
+  case "$rb" in
+    [Yy]* ) sudo reboot ;;
+    * ) pause ;;
+  esac
+}
+
 display_menu() {
   echo ""
   echo "Was möchtest du tun?"
@@ -254,6 +322,7 @@ display_menu() {
   echo "9) Root-Login aktivieren"
   echo "10) VNC, SPI, I2C, Serial aktivieren"
   echo "11) POE-HAT installieren"
+  echo "12) Display 180° drehen (dauerhaft)"
   echo "Q) Beenden"
   echo ""
 }
@@ -262,7 +331,7 @@ display_menu() {
 while true; do
   clear
   display_menu
-  read -p "Option wählen [1-11, q]: " choice
+  read -p "Option wählen [1-12, q]: " choice
   case "$choice" in
     1) update_system ;;
     2) install_tools ;;
@@ -275,6 +344,7 @@ while true; do
     9) root_login_aktivieren ;;
     10) schnittstellen_aktivieren ;;
     11) install_poe_hat ;;
+    12) rotate_display_180 ;;
     Q|q)
       clear
       echo -e "${GREEN}✅ Setup abgeschlossen. Tschüss!${NC}"
