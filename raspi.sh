@@ -54,42 +54,61 @@ install_tools() {
   pause
 }
 
-# --- TILDE: Source-Build (Repo ist kaputt/404) ---
+# --- TILDE: korrekt aus Git bauen (mehrere Repos + doall + make) ---
 install_tilde() {
-  echo -e "${YELLOW}Installiere tilde Editor (Build aus Source)...${NC}"
+  echo -e "${YELLOW}Installiere tilde Editor (Build aus Source – Git Dev Build)...${NC}"
 
   if command -v tilde >/dev/null 2>&1; then
-    echo -e "${GREEN}✅ tilde ist bereits installiert.${NC}"
+    echo -e "${GREEN}✅ tilde ist bereits installiert: $(command -v tilde)${NC}"
     pause
     return
   fi
 
-  echo "📦 Abhängigkeiten installieren..."
+  echo "📦 Build-Abhängigkeiten installieren..."
   sudo apt update
   sudo apt install -y \
-    git \
-    build-essential \
-    cmake \
-    libncursesw5-dev \
+    git build-essential pkg-config \
+    flex gettext \
+    libacl1-dev libattr1-dev \
+    libgpm-dev \
+    libncurses-dev \
     libpcre2-dev \
-    libunistring-dev
+    libtool-bin \
+    libunistring-dev \
+    libxcb1-dev libx11-dev \
+    clang
 
-  echo "⬇️ Source laden..."
-  local TMPDIR="/tmp/tilde-build"
-  rm -rf "$TMPDIR"
-  git clone https://github.com/gphalkes/tilde.git "$TMPDIR"
-  cd "$TMPDIR"
+  # Build-Ordner
+  local WORKDIR="/tmp/tilde-dev"
+  rm -rf "$WORKDIR"
+  mkdir -p "$WORKDIR"
+  cd "$WORKDIR"
 
-  echo "🛠️ Build..."
-  mkdir -p build
-  cd build
-  cmake ..
-  make -j"$(nproc)"
+  echo "⬇️ Repos klonen (T3 + tilde)..."
+  # Reihenfolge egal, doall regelt den Build-Order
+  for i in makesys transcript t3shared t3window t3widget t3key t3config t3highlight tilde; do
+    git clone "https://github.com/gphalkes/$i.git"
+  done
 
-  echo "📦 Installieren..."
-  sudo make install
+  echo "🛠️ Build aller Libraries + tilde (doall make -C src)..."
+  # gem. tilde README: ./t3shared/doall --skip-non-source --stop-on-error make -C src
+  ./t3shared/doall --skip-non-source --stop-on-error make -C src
 
-  echo -e "${GREEN}✅ tilde erfolgreich installiert: $(command -v tilde)${NC}"
+  # Ergebnis laut README:
+  # tilde/src/.objects/edit ist der frisch gebaute Editor
+  local BIN="$WORKDIR/tilde/src/.objects/edit"
+  if [[ ! -x "$BIN" ]]; then
+    echo -e "${RED}❌ Build fertig, aber Binary nicht gefunden: $BIN${NC}"
+    echo -e "${YELLOW}➡️  Schau in den Build-Output oben (Fehler in einer der Libs).${NC}"
+    pause
+    return
+  fi
+
+  echo "📦 Installieren nach /usr/local/bin/tilde ..."
+  sudo install -m 0755 "$BIN" /usr/local/bin/tilde
+
+  echo -e "${GREEN}✅ tilde installiert: /usr/local/bin/tilde${NC}"
+  echo -e "${YELLOW}Hinweis:${NC} Das ist ein Dev-Build aus Git (nicht Release-Tarball)."
   pause
 }
 
@@ -301,7 +320,7 @@ EndSection
 EOF
 
   echo -e "${GREEN}✅ Touch-Rotation (X11) gesetzt: /etc/X11/xorg.conf.d/40-touch-rotate-180.conf${NC}"
-  echo -e "${YELLOW}Hinweis:${NC} Touch-Rotation wirkt bei X11. Wenn du nur Wayland nutzt, greift das ggf. nicht."
+  echo -e "${YELLOW}Hinweis:${NC} Touch-Rotation wirkt bei X11. Wenn du Wayland nutzt, greift das ggf. nicht."
 
   echo -e "${GREEN}✅ Fertig. Reboot erforderlich.${NC}"
   read -p "Jetzt neu starten? (y/N): " rb
@@ -330,7 +349,7 @@ display_menu() {
   echo ""
 }
 
-# --- Start ---
+# --- Hauptmenü ---
 while true; do
   clear
   echo -e "${GREEN}--------------------------------------${NC}"
